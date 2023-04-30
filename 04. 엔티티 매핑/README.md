@@ -138,3 +138,148 @@ public class Member {
 💡 이러한 속성들은 단지 DDL을 자동 생성할 때만 사용되고 JPA의 실행 로직에는 영향을 주지 않는다.
 
 </aside>
+
+## 4.6 기본 키 매핑
+
+위 예제에서는 @Id 어노테이션만 사용하여 Member의 기본 키를 애플리케이션에서 직접 할당했다. 기본 키를 데이터베이스가 생성하주는 값을 사용하려면 어떻게 매핑해야 할까? 
+
+- Ex) Mysql의 AUTO_INCREMENT
+
+**데이터베이스마다 기본 키를 생성하는 방식이 서로 다르므로 JPA는 다양한 키 생성 전략을 제공한다.**
+
+- 직접 할당: 기본 키 생성을 데이터베이스에 위임한다.
+- 자동 생성: 대리 키 사용 방식
+    - **IDENTITY**: 기본 키 생성을 데이터베이스에 위임한다.
+    - **SEQUENCE**: 데이터베이스 시퀀스를 사용해서 기본 키를 할당한다.
+    - **TABLE**: 키 생성 테이블을 사용한다.
+    
+
+### 4.6.1 기본 키 직접 할당 전략
+
+기본 키를 직접할당하려면 @Id로 매핑하면 된다.
+
+```java
+	@Id
+	@Column(name = "ID")
+	private String id;
+```
+
+- 적용 가능 자바 타입
+    - 자바 기본형, Wrapper형
+    - String, java.util.Date, java.sql.Date, java.math.BihDecimal, java.math.BigInteger
+- em.persist()로 엔티티를 저장하기 전에 애플리케이션에서 기본 키를 직접 할당해야 한다.
+    
+    ```java
+    Board board : new Board();
+    board.setid("id1); 
+    em.persist(board);
+    ```
+    
+
+### 4.6.2 IDENTITY 전략
+
+기본 키 생성을 데이터베이스에 위임하는 전략이다. ex) Mysql의 **AUTO_INCREMENT**
+
+- 데이터베이스에 값을 저장하고 나서야 기본 키 값을 구할 수 있을 때 사용한다.
+    - 데이터를 데이터베이스에 Insert한 후에 기본 키 값을 조회할 수 있다.
+- @GeneratedValue의 strategy 속성 값을 GenerationType.IDENTITY로 지정한다.
+    - 이 전략을 사용하면 JPA는 기본 키 값을 얻어오기 위해 데이터베이스를 추가로 조회함
+    - JDBC3에 추가된 Statement.**getFeneratedKeys**()를 사용하면 데이터를 저장하면서 동시에 생성된 기본 키 값도 얻어올 수 있다.
+        - **하이버네이트는 이 메소드를 사용해서 데이터베이스와 1번만 통신한다.**
+        
+- 엔티티가 영속 상태가 되려면 식별자가 반드시 필요하다. 하지만 IDENTITY 전략은 엔티티를 데이터베이스에 저장해야 식별자를 구할 수 있으므로 em.persist()를 호출하는 즉시 Insert Sql이 데이터베이스에 전달된다.
+
+<aside>
+💡 따라서, **IDENTITY 전략은 트랜잭션을 지원하는 쓰기 지연이 동작하지 않는다.**
+
+</aside>
+
+### 4.6.3 SEQUENCE 전략
+
+데이터베이스 시퀀스는 유일한 값을 순서대로 생성하는 특별한 데이터베이스 오브젝트이다.
+
+SEQUENCE 전략은 이 시퀀스를 사용하여 기본 키를 생성한다.
+
+```java
+CREATE SEQUENCE Board_seq START WITH 1 INCREMENT BY 1;
+```
+
+```java
+@Entity
+@SequenceGenerator (
+	name = "BOARD_SEQ_GENERATOR",
+	sequenceName : "BOARD_SEQ", //매핑할 데이터베이스 시퀀스 이름 
+	initialValue = 1, allocationSize : 1)
+public class Board {
+	@Id
+	@GeneratedValue ( strategy : GenerationType.SEQUENCE,
+										generator = "BOARD_SEQ_GENERATOR")
+	private Long id;
+	...
+}
+```
+
+- @SequenceGenerator를 사용해서 시퀀스 생성기를 등록한다.
+    
+    ![image](https://user-images.githubusercontent.com/83508073/235356415-afc02c3d-ea57-49e5-ae43-611bdebc61ce.png)
+
+    
+- 키 전략은 GenerationType.SEQUENCE로 지정하고 등록한 시퀀스 생성기를 연결한다.
+- IDENETITY와 내부 동작 방식이 다르다.
+    - em.persist()를 호출할 때 먼저 데이터베이스 시퀀스를 사용해서 식별자를 조회한다.
+    - 그리고 조회한 식별자를 엔티티에 할당한 후에 엔티티를 영속성 컨텍스트에 저장한다.
+    - 이후 트랜잭션을 커밋해서 플러시가 일어나면 엔티티를 데이터베이스에 저장한다.
+
+### 4.6.4 TABLE 전략
+
+- 키 생성 전용 테이블을 하나 만들고 여기에 이름과 값으로 사용할 컬럼을 만들어서 데이터베이스 시퀀스를 흉내내는 전략이다.
+- 값을 조회하면서 SELECT 쿼리를 사용하고 다음 값으로 증가시키기 위해 UPDATE 쿼리를 사용한다.
+- 모든 데이터베이스에 적용할 수 있다.
+- 하지만 성능이 떨어진다.
+
+```java
+create table MY_SEQUENCES ( 
+ sequence_name varchar(255) not null, 
+ next_val bigint, // 키 생성기를 사용할 때마다 증가
+ primary key ( sequence_name )
+)
+```
+
+```java
+@Entity 
+@TableGenerator( 
+ name = "MEMBER_SEQ_GENERATOR", 
+ table = "MY_SEQUENCES", 
+ pkColumnValue = “MEMBER_SEQ", allocationSize = 1) 
+public class Member { 
+ @Id 
+ @GeneratedValue(strategy = GenerationType.TABLE, 
+ generator = "MEMBER_SEQ_GENERATOR") 
+ private Long id;
+}
+```
+
+- **@TableGenerator**
+
+![image](https://user-images.githubusercontent.com/83508073/235356386-d7d29acf-df59-4bcc-b515-0019486ea219.png)
+
+
+### 4.6.5 AUTO 전략
+
+선택한 데이터베이스 방언에따라 IDENTITY, SEQUENCE, TABLE 전략 중 하나를 자동으로 선택한다.
+
+- 데이터베이스를 변경해도 코드를 수정할 필요가 없다.
+
+### 4.6.6 기본 키 매핑 정리
+
+<aside>
+💡 영속성 컨텍스트는 엔티티를 식별자 값으로 구분하므로 **엔티티를 영속 상태로 만들려면 식별자 값이 반드시 있어야 한다.**
+
+</aside>
+
+em.persist()를 호출한 직후 발생하는 일
+
+1. **직접 할당**: em.persist()를 호출하기 전에 애플리케이션에서 직접 식별자 값을 할당해야 한다. 만약 식별자 값이 없으면 예외가 발생한다.
+2. **SEQUENCE**: 데이터베이스 시퀀스에서 식별자 값을 획득한 후 영속성 컨텍스트에 저장한다.
+3. **TABLE**: 데이터베이스 시퀀스 생성용 테이블에서 식별자 값을 획득한 후 영속성 컨텍스트에 저장한다.
+4. **IDENTITY**: 데이터베이스에 엔티티를 저장해서 식별자 값을 획득한 후 영속성 컨텍스트에 저장한다.
