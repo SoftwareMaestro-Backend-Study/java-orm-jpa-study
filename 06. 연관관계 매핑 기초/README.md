@@ -1,5 +1,44 @@
 # 06. 연관관계 매핑 기초
 
+# 요약
+연관관계의 주인
+- FK를 갖고 있는 곳!
+- mappedBy가 없는 곳!
+
+상황별 Annotation 정리
+
+1. @ManyToOne
+	- 주인
+		- @ManyToOne
+		- @JoinColumn(name = "COLUMN_NAME")
+	-  !주인
+		- @OneToMany(mappedBy = "ownerField")
+2. ~~@OneToMany (NOT RECOMMENDED)~~
+	-  !주인
+		- @OneToMany
+		- @JoinColumn(name = "TEAM_ID")
+	- 주인  
+		- @ManyToOne
+		- @JoinColumn(
+		  name = "COLUMN_NAME", insertable = false, updatable = false)
+3. @OneToOne
+	- 주인
+		- @OneToOne
+		- @JoinColumn(name = "COLUMN_NAME")
+	-  !주인
+		- @OneToOne(mappedBy = "ownerField")
+4. ~~@ManyToMany (NOT RECOMMENDED)~~
+	- 주인
+		- @ManyToMany
+		-   @JoinColumn(name = "MID_TABLE_NAME",
+				joinColumns = "MY_COLUMN_NAME",
+				inverseJoinColumns = @JoinColumn(name = "YOUR_COLUMN_NAME")
+			)
+	-  !주인
+		- @ManyToMany(mappedBy = "ownerField")
+5. → @ManyToMany의 대안 : @ManyToOne 두개 사용!
+
+
 # 6.1 다대일
 ## 다대일 단방향
 
